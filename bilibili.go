@@ -34,36 +34,40 @@ func NewBilibiliCollector(client *Client) *BilibiliCollector {
 var bilibiliLoginError = errors.New("bilibili login error")
 
 func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
-	p("collecting bilibili.\n")
-	maxPage := 10
-	wg := new(sync.WaitGroup)
-	wg.Add(maxPage)
-	lock := new(sync.Mutex)
-	errors := make([]error, 0, maxPage)
-	for page := 1; page <= maxPage; page++ {
-		go func(page int) {
-			defer wg.Done()
-			var entries []Entry
-			entries, err := b.CollectTimeline(page)
-			lock.Lock()
-			ret = append(ret, entries...)
-			errors = append(errors, err)
-			lock.Unlock()
-		}(page)
-	}
-	wg.Wait()
-	for _, e := range errors {
-		if e != nil {
-			if e == bilibiliLoginError {
-				err = b.Login()
-				if err != nil {
-					return nil, err
+	for _, fun := range []func(int) ([]Entry, error){
+		b.CollectTimeline,
+		b.CollectNewest,
+	} {
+		maxPage := 10
+		wg := new(sync.WaitGroup)
+		wg.Add(maxPage)
+		lock := new(sync.Mutex)
+		errors := make([]error, 0, maxPage)
+		for page := 1; page <= maxPage; page++ {
+			go func(page int) {
+				defer wg.Done()
+				entries, err := fun(page)
+				lock.Lock()
+				ret = append(ret, entries...)
+				errors = append(errors, err)
+				lock.Unlock()
+			}(page)
+		}
+		wg.Wait()
+		for _, e := range errors {
+			if e != nil {
+				if e == bilibiliLoginError {
+					err = b.Login()
+					if err != nil {
+						return nil, err
+					}
+					return b.Collect()
 				}
-				return b.Collect()
+				err = e
 			}
-			err = e
 		}
 	}
+
 	p("collected %d entries from bilibili.\n", len(ret))
 	return
 }
@@ -145,11 +149,81 @@ loop_lis:
 			Image:       image,
 			Description: desc,
 		})
-		p("%s\n", link)
-		p("%s\n", image)
 		p("%s\n", title)
-		p("%s\n", desc)
-		p("======\n\n")
+	}
+
+	return
+}
+
+func (b *BilibiliCollector) CollectNewest(page int) (ret []Entry, err error) {
+	// get content
+	url := fmt.Sprintf("http://www.bilibili.com/video/bangumi-two-%d.html", page)
+	data, err := b.client.GetBytes(url, nil)
+	if err != nil {
+		return nil, err
+	}
+	data, err = tidyHtml(data)
+	if err != nil {
+		return nil, err
+	}
+
+	// parse
+	type Ul struct {
+		Lis []struct {
+			As []struct {
+				Href string `xml:"href,attr"`
+				Img  struct {
+					Src string `xml:"src,attr"`
+				} `xml:"img"`
+				Text string `xml:",chardata"`
+			} `xml:"a"`
+		} `xml:"li"`
+		Class string `xml:"class,attr"`
+	}
+	structure := struct {
+		Body struct {
+			Div []struct {
+				Div []struct {
+					Div []struct {
+						Div []struct {
+							Ul []Ul `xml:"ul"`
+						} `xml:"div"`
+					} `xml:"div"`
+				} `xml:"div"`
+			} `xml:"div"`
+		} `xml:"body"`
+	}{}
+	err = xml.Unmarshal(data, &structure)
+	if err != nil {
+		return nil, err
+	}
+	var ul Ul
+	var ok bool
+	if ul, ok = find(structure, func(i interface{}) bool {
+		if ul, ok := i.(Ul); ok && ul.Class == "vd_list" {
+			return true
+		}
+		return false
+	}).(Ul); !ok {
+		return nil, Err("no ul found")
+	}
+
+	// collect
+	for _, li := range ul.Lis {
+		link := "http://www.bilibili.com" + li.As[0].Href
+		id, err := strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
+		if err != nil {
+			return nil, Err("link without av id %s", link)
+		}
+		title := li.As[1].Text
+		image := li.As[0].Img.Src
+		p("%s\n", title)
+		ret = append(ret, &BilibiliEntry{
+			Id:    id,
+			Link:  link,
+			Title: title,
+			Image: image,
+		})
 	}
 
 	return
