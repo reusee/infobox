@@ -180,17 +180,13 @@ func (b *BilibiliCollector) CollectNewest(page int) (ret []Entry, err error) {
 		} `xml:"li"`
 		Class string `xml:"class,attr"`
 	}
+	type Div struct {
+		Divs []Div `xml:"div"`
+		Ul   []Ul  `xml:"ul"`
+	}
 	structure := struct {
 		Body struct {
-			Div []struct {
-				Div []struct {
-					Div []struct {
-						Div []struct {
-							Ul []Ul `xml:"ul"`
-						} `xml:"div"`
-					} `xml:"div"`
-				} `xml:"div"`
-			} `xml:"div"`
+			Divs []Div `xml:"div"`
 		} `xml:"body"`
 	}{}
 	err = xml.Unmarshal(data, &structure)
