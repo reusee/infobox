@@ -118,11 +118,9 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 		return nil, err
 	}
 
-	/*
-		buf := new(bytes.Buffer)
-		json.Indent(buf, content, "", "    ")
-		p("%s\n", buf.Bytes())
-	*/
+	//buf := new(bytes.Buffer)
+	//json.Indent(buf, content, "", "    ")
+	//p("%s\n", buf.Bytes())
 
 	var result []*DoubanEntry
 	err = json.Unmarshal(content, &result)
@@ -158,6 +156,7 @@ type DoubanEntry struct {
 		Avatar string `json:"large_avatar"`
 		Name   string `json:"screen_name"`
 	}
+	Reshared *DoubanEntry `json:"reshared_status"` //TODO not work
 }
 
 func (d DoubanEntry) GetKey() string {
@@ -165,6 +164,16 @@ func (d DoubanEntry) GetKey() string {
 }
 
 func (d *DoubanEntry) ToRssItem() RssItem {
+	parts := d.collectParts()
+	return RssItem{
+		Title:  strings.Join(parts, " - "),
+		Link:   s("http://www.douban.com/people/%s/status/%d/", d.User.Uid, d.Id),
+		Desc:   strings.Join(parts, " - "),
+		Author: "Douban",
+	}
+}
+
+func (d *DoubanEntry) collectParts() []string {
 	parts := []string{
 		d.User.Name,
 		d.Title,
@@ -177,10 +186,8 @@ func (d *DoubanEntry) ToRssItem() RssItem {
 	if d.Text != "" {
 		parts = append(parts, d.Text)
 	}
-	return RssItem{
-		Title:  strings.Join(parts, " - "),
-		Link:   s("http://www.douban.com/people/%s/status/%d/", d.User.Uid, d.Id),
-		Desc:   strings.Join(parts, "\n"),
-		Author: "Douban",
+	if d.Reshared != nil {
+		parts = append(parts, d.Reshared.collectParts()...)
 	}
+	return parts
 }

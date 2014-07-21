@@ -149,7 +149,6 @@ loop_lis:
 			Image:       image,
 			Description: desc,
 		})
-		p("%s\n", title)
 	}
 
 	return
@@ -213,7 +212,6 @@ func (b *BilibiliCollector) CollectNewest(page int) (ret []Entry, err error) {
 		}
 		title := li.As[1].Text
 		image := li.As[0].Img.Src
-		p("%s\n", title)
 		ret = append(ret, &BilibiliEntry{
 			Id:    id,
 			Link:  link,

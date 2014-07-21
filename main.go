@@ -55,12 +55,12 @@ func main() {
 	collect := func() {
 		// collect
 		for _, collector := range []Collector{
-			NewBilibiliCollector(client),                // bilibili
+			//NewBilibiliCollector(client),                // bilibili
 			NewDoubanCollector(db.TokenCache("douban")), // douban
 		} {
 			entries, err := collector.Collect()
 			if err != nil {
-				log.Fatal(err)
+				continue
 			}
 			db.AddEntries(entries)
 		}
