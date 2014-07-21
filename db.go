@@ -6,10 +6,18 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 )
 
+type Item struct {
+	Entry   Entry
+	AddTime time.Time
+	Read    bool
+}
+
 type Database struct {
-	Entries map[string]Entry
+	Entries []*Item
+	Set     map[string]struct{}
 	Jar     *Jar
 	dbPath  string
 }
@@ -19,9 +27,9 @@ func NewDatabase(dbDir string) (*Database, error) {
 	f, err := os.Open(dbPath)
 	if err != nil { // no file or error, create new database
 		database := &Database{
-			Entries: make(map[string]Entry),
-			Jar:     NewJar(),
-			dbPath:  dbPath,
+			Set:    make(map[string]struct{}),
+			Jar:    NewJar(),
+			dbPath: dbPath,
 		}
 		p("new database created.\n")
 		return database, nil
@@ -61,9 +69,13 @@ func (d *Database) Save() error {
 
 func (d *Database) AddEntries(entries []Entry) {
 	for _, entry := range entries {
-		key := entry.Key()
-		if _, ok := d.Entries[key]; !ok {
-			d.Entries[key] = entry
+		key := entry.GetKey()
+		if _, ok := d.Set[key]; !ok {
+			d.Entries = append(d.Entries, &Item{
+				Entry:   entry,
+				AddTime: time.Now(),
+			})
+			d.Set[key] = struct{}{}
 		}
 	}
 }

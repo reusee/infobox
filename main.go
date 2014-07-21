@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -15,14 +16,13 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-var p = fmt.Printf
-
 func Err(format string, args ...interface{}) error {
 	return errors.New(fmt.Sprintf(format, args...))
 }
 
 type Entry interface {
-	Key() string
+	GetKey() string
+	ToRssItem() RssItem
 }
 
 type Collector interface {
@@ -51,21 +51,34 @@ func main() {
 	// init http client
 	client := NewClient(db.Jar)
 
-	// collect
-	for _, collector := range []Collector{
-		NewBilibiliCollector(client), // bilibili
-	} {
-		entries, err := collector.Collect()
-		if err != nil {
+	collect := func() {
+		// collect
+		for _, collector := range []Collector{
+			NewBilibiliCollector(client), // bilibili
+		} {
+			entries, err := collector.Collect()
+			if err != nil {
+				log.Fatal(err)
+			}
+			db.AddEntries(entries)
+		}
+		// save
+		if err := db.Save(); err != nil {
 			log.Fatal(err)
 		}
-		db.AddEntries(entries)
 	}
 
-	// save
-	if err := db.Save(); err != nil {
+	go func() {
+		for {
+			collect()
+			time.Sleep(time.Minute * 3)
+		}
+	}()
+
+	http.HandleFunc("/rss", db.RssHandler)
+	err = http.ListenAndServe("127.0.0.1:38888", nil)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	p("total %d entries\n", len(db.Entries))
 }

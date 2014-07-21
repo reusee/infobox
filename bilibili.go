@@ -233,8 +233,18 @@ type BilibiliEntry struct {
 	Description string
 }
 
-func (e *BilibiliEntry) Key() string {
+func (e *BilibiliEntry) GetKey() string {
 	return fmt.Sprintf("bilibili %d", e.Id)
+}
+
+func (e *BilibiliEntry) ToRssItem() RssItem {
+	return RssItem{
+		Title:  e.Title,
+		Link:   e.Link,
+		Desc:   e.Description,
+		Author: "Bilibili",
+		Guid:   e.GetKey(),
+	}
 }
 
 func (b *BilibiliCollector) Login() error {

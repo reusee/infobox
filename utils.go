@@ -2,10 +2,15 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 
 	"code.google.com/p/go.net/html"
 )
+
+var p = fmt.Printf
+var f = fmt.Fprintf
+var s = fmt.Sprintf
 
 func tidyHtml(input []byte) ([]byte, error) {
 	// tidy
