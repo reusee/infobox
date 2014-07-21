@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"code.google.com/p/goauth2/oauth"
 )
 
 type Item struct {
@@ -16,10 +18,11 @@ type Item struct {
 }
 
 type Database struct {
-	Entries []*Item
-	Set     map[string]struct{}
-	Jar     *Jar
-	dbPath  string
+	Entries     []*Item
+	Set         map[string]struct{}
+	Jar         *Jar
+	dbPath      string
+	OAuthTokens map[string]*oauth.Token
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
@@ -27,20 +30,24 @@ func NewDatabase(dbDir string) (*Database, error) {
 	f, err := os.Open(dbPath)
 	if err != nil { // no file or error, create new database
 		database := &Database{
-			Set:    make(map[string]struct{}),
-			Jar:    NewJar(),
-			dbPath: dbPath,
+			Set:         make(map[string]struct{}),
+			Jar:         NewJar(),
+			dbPath:      dbPath,
+			OAuthTokens: make(map[string]*oauth.Token),
 		}
 		p("new database created.\n")
 		return database, nil
 	}
+	defer f.Close()
 	var database Database
 	err = gob.NewDecoder(f).Decode(&database)
 	if err != nil {
 		return nil, Err("gob decode %v", err)
 	}
 	database.dbPath = dbPath
-	f.Close()
+	if database.OAuthTokens == nil {
+		database.OAuthTokens = make(map[string]*oauth.Token)
+	}
 	p("database loaded.\n")
 	return &database, nil
 }

@@ -243,7 +243,6 @@ func (e *BilibiliEntry) ToRssItem() RssItem {
 		Link:   e.Link,
 		Desc:   e.Description,
 		Author: "Bilibili",
-		Guid:   e.GetKey(),
 	}
 }
 

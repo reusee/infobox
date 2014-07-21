@@ -50,11 +50,13 @@ func main() {
 
 	// init http client
 	client := NewClient(db.Jar)
+	_ = client
 
 	collect := func() {
 		// collect
 		for _, collector := range []Collector{
-			NewBilibiliCollector(client), // bilibili
+			NewBilibiliCollector(client),                // bilibili
+			NewDoubanCollector(db.TokenCache("douban")), // douban
 		} {
 			entries, err := collector.Collect()
 			if err != nil {
@@ -75,6 +77,7 @@ func main() {
 		}
 	}()
 
+	p("start rss server.\n")
 	http.HandleFunc("/rss", db.RssHandler)
 	err = http.ListenAndServe("127.0.0.1:38888", nil)
 	if err != nil {
