@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,7 +20,7 @@ type DoubanCollector struct {
 	client *http.Client
 }
 
-func NewDoubanCollector(tokenCache oauth.Cache) Collector {
+func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
 	// oauth config
 	config := &oauth.Config{
 		ClientId:     "07f3402dcfdf369d17d9c0896f9da3d7",
@@ -35,7 +34,10 @@ func NewDoubanCollector(tokenCache oauth.Cache) Collector {
 
 	// get token
 	token, err := config.TokenCache.Token()
-	auth := func() {
+	auth := func() error {
+		if SilenceMode { // do not auth in silence mode
+			return Err("douban auth error")
+		}
 		url := config.AuthCodeURL("")
 		p("%s\n", url)
 		var code string
@@ -43,11 +45,15 @@ func NewDoubanCollector(tokenCache oauth.Cache) Collector {
 		fmt.Scanf("%s", &code)
 		token, err = transport.Exchange(code)
 		if err != nil {
-			log.Fatalf("Exchange douban token %v", err)
+			return Err("exchange douban token %v", err)
 		}
+		return nil
 	}
 	if err != nil {
-		auth()
+		err = auth()
+		if err != nil {
+			return nil, err
+		}
 	}
 	transport.Token = token
 	c := &DoubanCollector{
@@ -58,12 +64,12 @@ func NewDoubanCollector(tokenCache oauth.Cache) Collector {
 validate:
 	resp, err := c.client.Get("https://api.douban.com/v2/user/~me")
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	var ret struct {
 		Msg  string
@@ -71,11 +77,14 @@ validate:
 	}
 	err = json.Unmarshal(content, &ret)
 	if ret.Code != 0 { // token error
-		auth()
+		err = auth()
+		if err != nil {
+			return nil, err
+		}
 		goto validate
 	}
 
-	return c
+	return c, nil
 }
 
 func (d *DoubanCollector) Collect() (ret []Entry, err error) {

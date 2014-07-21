@@ -36,7 +36,7 @@ func (d *Database) RssHandler(w http.ResponseWriter, req *http.Request) {
 		item.Pub = s("%v", entry.AddTime)
 		item.Guid = entry.Entry.GetKey()
 		structure.Channel.Items = append(structure.Channel.Items, item)
-		if len(structure.Channel.Items) > 10000 {
+		if len(structure.Channel.Items) > 100000 {
 			break
 		}
 	}

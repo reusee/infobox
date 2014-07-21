@@ -25,10 +25,10 @@ type BilibiliCollector struct {
 	client *Client
 }
 
-func NewBilibiliCollector(client *Client) *BilibiliCollector {
+func NewBilibiliCollector(client *Client) (*BilibiliCollector, error) {
 	return &BilibiliCollector{
 		client: client,
-	}
+	}, nil
 }
 
 var bilibiliLoginError = errors.New("bilibili login error")
@@ -39,6 +39,7 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 		b.CollectNewest,
 	} {
 		maxPage := 10
+		sem := make(chan bool, 10)
 		wg := new(sync.WaitGroup)
 		wg.Add(maxPage)
 		lock := new(sync.Mutex)
@@ -46,17 +47,19 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 		for page := 1; page <= maxPage; page++ {
 			go func(page int) {
 				defer wg.Done()
+				sem <- true
 				entries, err := fun(page)
 				lock.Lock()
 				ret = append(ret, entries...)
 				errors = append(errors, err)
 				lock.Unlock()
+				<-sem
 			}(page)
 		}
 		wg.Wait()
 		for _, e := range errors {
 			if e != nil {
-				if e == bilibiliLoginError {
+				if e == bilibiliLoginError && !SilenceMode {
 					err = b.Login()
 					if err != nil {
 						return nil, err

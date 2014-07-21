@@ -29,7 +29,20 @@ type Collector interface {
 	Collect() ([]Entry, error)
 }
 
+var (
+	SilenceMode bool
+)
+
 func main() {
+	// parse args
+	for _, arg := range os.Args[1:] {
+		if arg == "silence" {
+			SilenceMode = true
+		} else {
+			log.Fatalf("unknown command line argument %s", arg)
+		}
+	}
+
 	// init database
 	user, err := user.Current()
 	if err != nil {
@@ -54,13 +67,17 @@ func main() {
 
 	collect := func() {
 		// collect
-		for _, collector := range []Collector{
-			//NewBilibiliCollector(client),                // bilibili
-			NewDoubanCollector(db.TokenCache("douban")), // douban
+		for _, f := range []func() (Collector, error){
+			func() (Collector, error) { return NewBilibiliCollector(client) },
+			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
 		} {
+			collector, err := f()
+			if err != nil {
+				continue //TODO log
+			}
 			entries, err := collector.Collect()
 			if err != nil {
-				continue
+				continue //TODO log
 			}
 			db.AddEntries(entries)
 		}
