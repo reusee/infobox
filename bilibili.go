@@ -36,7 +36,12 @@ var bilibiliLoginError = errors.New("bilibili login error")
 func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 	for _, fun := range []func(int) ([]Entry, error){
 		b.CollectTimeline,
-		b.CollectNewest,
+		func(page int) ([]Entry, error) {
+			return b.CollectNewest("http://www.bilibili.com/video/bangumi-two-%d.html", page)
+		},
+		func(page int) ([]Entry, error) {
+			return b.CollectNewest("http://www.bilibili.com/video/douga-else-information-%d.html", page)
+		},
 	} {
 		maxPage := 10
 		sem := make(chan bool, 10)
@@ -157,9 +162,9 @@ loop_lis:
 	return
 }
 
-func (b *BilibiliCollector) CollectNewest(page int) (ret []Entry, err error) {
+func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []Entry, err error) {
 	// get content
-	url := fmt.Sprintf("http://www.bilibili.com/video/bangumi-two-%d.html", page)
+	url := s(urlPattern, page)
 	data, err := b.client.GetBytes(url, nil)
 	if err != nil {
 		return nil, err

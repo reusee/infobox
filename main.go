@@ -70,6 +70,7 @@ func main() {
 		for _, f := range []func() (Collector, error){
 			func() (Collector, error) { return NewBilibiliCollector(client) },
 			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
+			func() (Collector, error) { return NewZhihuCollector(client) },
 		} {
 			collector, err := f()
 			if err != nil {
@@ -94,6 +95,7 @@ func main() {
 		}
 	}()
 
+	// rss server
 	p("start rss server.\n")
 	http.HandleFunc("/rss", db.RssHandler)
 	err = http.ListenAndServe("127.0.0.1:38888", nil)
