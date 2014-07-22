@@ -33,7 +33,7 @@ func (j *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 
 func (j *Jar) Cookies(u *url.URL) (ret []*http.Cookie) {
 	for domain, cookies := range j.Store {
-		if domain == u.Host || strings.Contains(u.Host, domain) {
+		if domain == u.Host || (domain != "" && strings.Contains(u.Host, domain)) {
 			for _, cookie := range cookies {
 				ret = append(ret, cookie)
 			}
