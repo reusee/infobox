@@ -65,19 +65,24 @@ func main() {
 	client := NewClient(db.Jar)
 	_ = client
 
+	// collect
+	var collectors []Collector
+	for _, f := range []func() (Collector, error){
+		func() (Collector, error) { return NewBilibiliCollector(client) },
+		func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
+		func() (Collector, error) { return NewZhihuCollector(client) },
+	} {
+		collector, err := f()
+		if err != nil {
+			log.Fatal(err)
+		}
+		collectors = append(collectors, collector)
+	}
 	collect := func() {
-		// collect
-		for _, f := range []func() (Collector, error){
-			func() (Collector, error) { return NewBilibiliCollector(client) },
-			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
-			func() (Collector, error) { return NewZhihuCollector(client) },
-		} {
-			collector, err := f()
-			if err != nil {
-				continue //TODO log
-			}
+		for _, collector := range collectors {
 			entries, err := collector.Collect()
 			if err != nil {
+				p("%v\n", err)
 				continue //TODO log
 			}
 			db.AddEntries(entries)
@@ -91,7 +96,7 @@ func main() {
 	go func() {
 		for {
 			collect()
-			time.Sleep(time.Minute * 3)
+			time.Sleep(time.Minute * 5)
 		}
 	}()
 
