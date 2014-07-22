@@ -1,6 +1,13 @@
 package main
 
-import "math/rand"
+import (
+	"encoding/gob"
+	"math/rand"
+)
+
+func init() {
+	gob.Register(new(ErrorEntry))
+}
 
 type ErrorEntry struct {
 	Id      int64
