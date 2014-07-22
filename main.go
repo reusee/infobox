@@ -18,6 +18,7 @@ func init() {
 type Entry interface {
 	GetKey() string
 	ToRssItem() RssItem
+	ToHtml() string
 }
 
 type Collector interface {
@@ -98,6 +99,8 @@ func main() {
 			time.Sleep(time.Minute * 5)
 		}
 	}()
+
+	go NewReader(db)
 
 	// rss server
 	p("start rss server.\n")

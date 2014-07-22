@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -134,7 +136,7 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 
 	//buf := new(bytes.Buffer)
 	//json.Indent(buf, content, "", "    ")
-	//p("%s\n", buf.Bytes())
+	//p("%s\n====================\n", buf.Bytes())
 
 	var result []*DoubanEntry
 	err = json.Unmarshal(content, &result)
@@ -143,6 +145,7 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 	}
 	for _, entry := range result {
 		ret = append(ret, entry)
+		p("%v\n", entry.Attachments)
 	}
 
 	return
@@ -160,7 +163,7 @@ type DoubanEntry struct {
 			Original string `json:"original_src"`
 			Href     string
 			Type     string
-		} `json:"media"`
+		}
 		Href string
 		Type string
 	}
@@ -185,6 +188,40 @@ func (d *DoubanEntry) ToRssItem() RssItem {
 		Desc:   strings.Join(parts, " - "),
 		Author: "Douban",
 	}
+}
+
+var doubanHtmllTemplate = template.Must(template.New("douban").Parse(`
+<h2>Douban</h2>
+<p>{{.User.Name}}</p>
+<p>{{.Title}}</p>
+{{range $index, $elem := .Attachments}}
+<div class="attachment">
+	<p>{{$elem.Title}}</p>
+	<p>{{$elem.Description}}</p>
+	{{range $i, $e := $elem.Media}}
+		{{if eq $e.Type "image"}}
+		<p><img src="{{$e.Src}}" /></p>
+		{{end}}
+	{{end}}
+</div>
+{{end}}
+<p>{{.Text}}</p>
+`))
+
+func (d *DoubanEntry) ToHtml() string {
+	buf := new(bytes.Buffer)
+	err := doubanHtmllTemplate.Execute(buf, d)
+	if err != nil {
+		return s("render error %v", err)
+	}
+	p("%v\n", d.Attachments)
+	if d.Reshared != nil {
+		err := doubanHtmllTemplate.Execute(buf, d.Reshared)
+		if err != nil {
+			return s("render error %v", err)
+		}
+	}
+	return string(buf.Bytes())
 }
 
 func (d *DoubanEntry) collectParts() []string {

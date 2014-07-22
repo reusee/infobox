@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 )
 
 func init() {
@@ -254,6 +255,21 @@ func (e *BilibiliEntry) ToRssItem() RssItem {
 		Desc:   e.Description,
 		Author: "Bilibili",
 	}
+}
+
+var bilibiliHtmlTemplate = template.Must(template.New("bilibili").Parse(`
+<h2>Bilibili</h2>
+<p>{{.Title}}</p>
+<p>{{.Description}}</p>
+`))
+
+func (e *BilibiliEntry) ToHtml() string {
+	buf := new(bytes.Buffer)
+	err := bilibiliHtmlTemplate.Execute(buf, e)
+	if err != nil {
+		return s("render error %v", err)
+	}
+	return string(buf.Bytes())
 }
 
 func (b *BilibiliCollector) Login() error {
