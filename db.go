@@ -25,6 +25,7 @@ type Database struct {
 	dbPath      string
 	OAuthTokens map[string]*oauth.Token
 	portLock    net.Listener
+	Kv          map[string]interface{}
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
@@ -42,6 +43,7 @@ func NewDatabase(dbDir string) (*Database, error) {
 			Jar:         NewJar(),
 			dbPath:      dbPath,
 			OAuthTokens: make(map[string]*oauth.Token),
+			Kv:          make(map[string]interface{}),
 		}
 		p("new database created.\n")
 		return database, nil
@@ -55,6 +57,9 @@ func NewDatabase(dbDir string) (*Database, error) {
 	database.dbPath = dbPath
 	if database.OAuthTokens == nil {
 		database.OAuthTokens = make(map[string]*oauth.Token)
+	}
+	if database.Kv == nil {
+		database.Kv = make(map[string]interface{})
 	}
 	database.portLock = ln
 	p("database loaded.\n")
@@ -94,4 +99,12 @@ func (d *Database) AddEntries(entries []Entry) {
 			d.Set[key] = struct{}{}
 		}
 	}
+}
+
+func (d *Database) KvGet(key string) interface{} {
+	return d.Kv[key]
+}
+
+func (d *Database) KvSet(key string, value interface{}) {
+	d.Kv[key] = value
 }

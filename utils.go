@@ -62,3 +62,8 @@ func find(obj interface{}, predict func(interface{}) bool) interface{} {
 	}
 	return nil
 }
+
+type KvStore interface {
+	KvGet(string) interface{}
+	KvSet(string, interface{})
+}
