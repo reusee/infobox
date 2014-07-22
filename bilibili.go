@@ -64,12 +64,16 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 		wg.Wait()
 		for _, e := range errors {
 			if e != nil {
-				if e == bilibiliLoginError && !SilenceMode {
-					err = b.Login()
-					if err != nil {
-						return nil, err
+				if e == bilibiliLoginError {
+					if InteractiveMode {
+						err = b.Login()
+						if err != nil {
+							return nil, err
+						}
+						return b.Collect()
+					} else {
+						return nil, Err("bilibili auth error")
 					}
-					return b.Collect()
 				}
 				err = e
 			}

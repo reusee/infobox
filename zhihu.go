@@ -71,7 +71,11 @@ func (z *ZhihuCollector) Login() error {
 func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
 	if z.xsrf == "" {
 		p("zhihu: no xsrf.\n")
-		z.Login()
+		if InteractiveMode {
+			z.Login()
+		} else {
+			return nil, Err("zhihu auth error")
+		}
 	}
 
 	var start string

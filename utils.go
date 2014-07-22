@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -66,4 +67,8 @@ func find(obj interface{}, predict func(interface{}) bool) interface{} {
 type KvStore interface {
 	KvGet(string) interface{}
 	KvSet(string, interface{})
+}
+
+func Err(format string, args ...interface{}) error {
+	return errors.New(fmt.Sprintf(format, args...))
 }

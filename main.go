@@ -1,23 +1,18 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-}
-
-func Err(format string, args ...interface{}) error {
-	return errors.New(fmt.Sprintf(format, args...))
 }
 
 type Entry interface {
@@ -30,14 +25,14 @@ type Collector interface {
 }
 
 var (
-	SilenceMode bool
+	InteractiveMode bool
 )
 
 func main() {
 	// parse args
 	for _, arg := range os.Args[1:] {
-		if arg == "silence" {
-			SilenceMode = true
+		if strings.HasPrefix(arg, "inter") {
+			InteractiveMode = true
 		} else {
 			log.Fatalf("unknown command line argument %s", arg)
 		}
@@ -82,8 +77,12 @@ func main() {
 		for _, collector := range collectors {
 			entries, err := collector.Collect()
 			if err != nil {
+				// insert error report entry
+				db.AddEntries([]Entry{
+					NewErrorEntry(err),
+				})
 				p("%v\n", err)
-				continue //TODO log
+				continue
 			}
 			db.AddEntries(entries)
 		}

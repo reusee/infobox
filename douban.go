@@ -35,9 +35,6 @@ func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
 	// get token
 	token, err := config.TokenCache.Token()
 	auth := func() error {
-		if SilenceMode { // do not auth in silence mode
-			return Err("douban auth error")
-		}
 		url := config.AuthCodeURL("")
 		p("%s\n", url)
 		var code string
@@ -50,7 +47,11 @@ func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
 		return nil
 	}
 	if err != nil {
-		err = auth()
+		if InteractiveMode {
+			err = auth()
+		} else {
+			err = Err("douban auth error")
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +78,11 @@ validate:
 	}
 	err = json.Unmarshal(content, &ret)
 	if ret.Code != 0 { // token error
-		err = auth()
+		if InteractiveMode {
+			err = auth()
+		} else {
+			err = Err("douban auth error")
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +170,7 @@ type DoubanEntry struct {
 		Avatar string `json:"large_avatar"`
 		Name   string `json:"screen_name"`
 	}
-	Reshared *DoubanEntry `json:"reshared_status"` //TODO not work
+	Reshared *DoubanEntry `json:"reshared_status"`
 }
 
 func (d DoubanEntry) GetKey() string {
