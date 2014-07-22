@@ -183,13 +183,16 @@ func (d *DoubanEntry) ToRssItem() RssItem {
 }
 
 func (d *DoubanEntry) collectParts() []string {
-	parts := []string{
-		d.User.Name,
-		d.Title,
-	}
+	var parts []string
+	var hasImage bool
+	parts = append(parts, d.User.Name)
+	parts = append(parts, d.Title)
 	for _, attach := range d.Attachments {
 		if attach.Title != "" {
 			parts = append(parts, attach.Title)
+		}
+		if attach.Type == "image" {
+			hasImage = true
 		}
 	}
 	if d.Text != "" {
@@ -197,6 +200,9 @@ func (d *DoubanEntry) collectParts() []string {
 	}
 	if d.Reshared != nil {
 		parts = append(parts, d.Reshared.collectParts()...)
+	}
+	if hasImage {
+		parts = append([]string{"[图]"}, parts...)
 	}
 	return parts
 }
