@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -23,9 +24,16 @@ type Database struct {
 	Jar         *Jar
 	dbPath      string
 	OAuthTokens map[string]*oauth.Token
+	portLock    net.Listener
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:53892")
+	if err != nil {
+		return nil, Err("database lock fail")
+	} else {
+		p("db locked.\n")
+	}
 	dbPath := filepath.Join(dbDir, "db")
 	f, err := os.Open(dbPath)
 	if err != nil { // no file or error, create new database
@@ -48,6 +56,7 @@ func NewDatabase(dbDir string) (*Database, error) {
 	if database.OAuthTokens == nil {
 		database.OAuthTokens = make(map[string]*oauth.Token)
 	}
+	database.portLock = ln
 	p("database loaded.\n")
 	return &database, nil
 }
