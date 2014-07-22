@@ -68,9 +68,9 @@ func main() {
 	// collect
 	var collectors []Collector
 	for _, f := range []func() (Collector, error){
-		func() (Collector, error) { return NewBilibiliCollector(client) },
 		func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
-		func() (Collector, error) { return NewZhihuCollector(client) },
+		func() (Collector, error) { return NewZhihuCollector(client, db) },
+		func() (Collector, error) { return NewBilibiliCollector(client) },
 	} {
 		collector, err := f()
 		if err != nil {
