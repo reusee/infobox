@@ -2,66 +2,68 @@ package main
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
-	"strings"
 )
 
 type Jar struct {
-	Store map[string]map[string]*http.Cookie
+	Cache map[string]JarCacheEntry
+	jar   *cookiejar.Jar
+}
+
+type JarCacheEntry struct {
+	URL    URL
+	Cookie *http.Cookie
+}
+
+type URL struct {
+	Scheme string
+	Host   string
+	Path   string
 }
 
 func NewJar() *Jar {
+	jar, _ := cookiejar.New(nil)
 	return &Jar{
-		Store: make(map[string]map[string]*http.Cookie),
+		Cache: make(map[string]JarCacheEntry),
+		jar:   jar,
 	}
 }
 
 func (j *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	for _, cookie := range cookies {
-		domain := u.Host
-		if cookie.Domain != "" {
-			domain = cookie.Domain
+		j.Cache[s("%s %s", u.Host, cookie.Name)] = JarCacheEntry{
+			URL: URL{
+				Scheme: u.Scheme,
+				Host:   u.Host,
+				Path:   u.Path,
+			},
+			Cookie: cookie,
 		}
-		m, ok := j.Store[domain]
-		if !ok {
-			m = make(map[string]*http.Cookie)
-			j.Store[domain] = m
-		}
-		m[cookie.Name] = cookie
 	}
+	j.jar.SetCookies(u, cookies)
 }
 
 func (j *Jar) Cookies(u *url.URL) (ret []*http.Cookie) {
-	for domain, cookies := range j.Store {
-		if domain == u.Host || (domain != "" && strings.Contains(u.Host, domain)) {
-			for _, cookie := range cookies {
-				ret = append(ret, cookie)
-			}
-		}
-	}
-	return
+	return j.jar.Cookies(u)
 }
 
-func (j *Jar) SetFromString(domain, str string) {
-	pairs := strings.Split(str, ";")
-	m, ok := j.Store[domain]
-	if !ok {
-		m = make(map[string]*http.Cookie)
+func (j *Jar) rebuild() {
+	if j.Cache == nil {
+		j.Cache = make(map[string]JarCacheEntry)
 	}
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		name := strings.TrimSpace(parts[0])
-		if name == "" {
-			continue
-		}
-		var value string
-		if len(parts) > 1 {
-			value = strings.TrimSpace(parts[1])
-		}
-		m[strings.TrimSpace(parts[0])] = &http.Cookie{
-			Name:  name,
-			Value: value,
-		}
+	if j.jar == nil {
+		jar, _ := cookiejar.New(nil)
+		j.jar = jar
 	}
-	j.Store[domain] = m
+	for _, entry := range j.Cache {
+		p("%v\n", entry.URL)
+		j.jar.SetCookies(&url.URL{
+			Scheme: entry.URL.Scheme,
+			Host:   entry.URL.Host,
+			Path:   entry.URL.Path,
+		}, []*http.Cookie{
+			entry.Cookie,
+		})
+	}
 }
