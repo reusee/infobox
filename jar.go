@@ -57,7 +57,6 @@ func (j *Jar) rebuild() {
 		j.jar = jar
 	}
 	for _, entry := range j.Cache {
-		p("%v\n", entry.URL)
 		j.jar.SetCookies(&url.URL{
 			Scheme: entry.URL.Scheme,
 			Host:   entry.URL.Host,
