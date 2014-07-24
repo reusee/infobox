@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
@@ -26,6 +27,7 @@ type Database struct {
 	OAuthTokens map[string]*oauth.Token
 	portLock    net.Listener
 	Kv          map[string]interface{}
+	kvLock      sync.Mutex
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
@@ -103,9 +105,13 @@ func (d *Database) AddEntries(entries []Entry) {
 }
 
 func (d *Database) KvGet(key string) interface{} {
+	d.kvLock.Lock()
+	defer d.kvLock.Unlock()
 	return d.Kv[key]
 }
 
 func (d *Database) KvSet(key string, value interface{}) {
+	d.kvLock.Lock()
+	defer d.kvLock.Unlock()
 	d.Kv[key] = value
 }
