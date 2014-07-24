@@ -145,6 +145,7 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 	}
 	for _, entry := range result {
 		ret = append(ret, entry)
+		p("%v\n", entry.Attachments)
 	}
 
 	return
@@ -213,6 +214,7 @@ func (d *DoubanEntry) ToHtml() string {
 	if err != nil {
 		return s("render error %v", err)
 	}
+	p("%v\n", d.Attachments)
 	if d.Reshared != nil {
 		err := doubanHtmllTemplate.Execute(buf, d.Reshared)
 		if err != nil {

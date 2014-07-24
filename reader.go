@@ -64,6 +64,7 @@ h2 {
 	for i >= 0 {
 		item := db.Entries[i]
 		html := item.Entry.ToHtml()
+		p("==> %s\n", html)
 		qt.Emit("set-html", css+html)
 		key := <-keys
 		switch key {
