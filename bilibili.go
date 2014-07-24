@@ -23,13 +23,27 @@ func init() {
 }
 
 type BilibiliCollector struct {
-	client *Client
+	kv     KvStore
+	cookie string
 }
 
-func NewBilibiliCollector(client *Client) (*BilibiliCollector, error) {
-	return &BilibiliCollector{
-		client: client,
-	}, nil
+func NewBilibiliCollector(kv KvStore) (*BilibiliCollector, error) {
+	b := &BilibiliCollector{
+		kv: kv,
+	}
+	var cookie string
+	if res := b.kv.KvGet("bilibili-cookie"); res != nil {
+		cookie = res.(string)
+	}
+	if cookie == "" {
+		err := b.Login()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		b.cookie = cookie
+	}
+	return b, nil
 }
 
 var bilibiliLoginError = errors.New("bilibili login error")
@@ -88,11 +102,12 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	// get content
 	url := fmt.Sprintf("http://www.bilibili.com/account/dynamic/dyn-%d", page)
-	data, err := b.client.GetBytes(url, nil)
+	data, err := GetBytesWithCookie(url, b.cookie)
 	if err != nil {
 		return nil, err
 	}
 	if bytes.Contains(data, []byte(`document.write("请先登录！");`)) {
+		p("bilibili need login\n")
 		return nil, bilibiliLoginError
 	}
 	data, err = tidyHtml(data)
@@ -170,7 +185,7 @@ loop_lis:
 func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []Entry, err error) {
 	// get content
 	url := s(urlPattern, page)
-	data, err := b.client.GetBytes(url, nil)
+	data, err := GetBytesWithCookie(url, b.cookie)
 	if err != nil {
 		return nil, err
 	}
@@ -273,8 +288,14 @@ func (e *BilibiliEntry) ToHtml() string {
 }
 
 func (b *BilibiliCollector) Login() error {
+	// get cookie
+	cookie, err := GetCookieStr("https://secure.bilibili.com/login")
+	if err != nil {
+		return err
+	}
+
 	// get captcha
-	resp, err := b.client.Get("https://secure.bilibili.com/captcha?r=0.43428630707785487")
+	resp, err := GetWithCookie("https://secure.bilibili.com/captcha?r=0.43428630707785487", cookie)
 	if err != nil {
 		return err
 	}
@@ -289,25 +310,48 @@ func (b *BilibiliCollector) Login() error {
 	var code string
 	p("input captcha code: ")
 	fmt.Scanf("%s", &code)
+
+	// get username and password
 	var user, password string
-	p("input username: ")
-	fmt.Scanf("%s", &user)
-	p("input password: ")
-	fmt.Scanf("%s", &password)
+	if res := b.kv.KvGet("bilibili-username"); res != nil {
+		user = res.(string)
+	}
+	if res := b.kv.KvGet("bilibili-password"); res != nil {
+		password = res.(string)
+	}
+	if user == "" || password == "" {
+		p("input username: ")
+		fmt.Scanf("%s", &user)
+		p("input password: ")
+		fmt.Scanf("%s", &password)
+		b.kv.KvSet("bilibili-username", user)
+		b.kv.KvSet("bilibili-password", password)
+	}
 
 	// post login form
-	resp, err = b.client.PostForm("https://secure.bilibili.com/login", url.Values{
+	resp, err = PostFormWithCookie("https://secure.bilibili.com/login", url.Values{
 		"act":      {"login"},
 		"gourl":    {"http://www.bilibili.com/account/dynamic"},
 		"keeptime": {"2592000"},
 		"userid":   {user},
 		"pwd":      {password},
 		"vdcode":   {code},
-	})
+	}, cookie)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if !bytes.Contains(content, []byte(`document.write("成功登录，现在转向指定页面...");`)) {
+		return Err("bilibili login failed")
+	}
+	cookie = RespGetCookieStr(resp)
+	p("bilibili cookie => %s\n", cookie)
+	b.kv.KvSet("bilibili-cookie", cookie)
+	b.cookie = cookie
 
 	return nil
 }

@@ -57,28 +57,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// init http client
-	client := NewClient(db.Jar)
-	_ = client
-
 	// collect
-	var collectors []Collector
-	for _, f := range []func() (Collector, error){
-		func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
-		func() (Collector, error) { return NewZhihuCollector(client, db) },
-		func() (Collector, error) { return NewBilibiliCollector(client) },
-	} {
-		collector, err := f()
-		if err != nil {
-			log.Fatal(err)
-		}
-		collectors = append(collectors, collector)
-	}
 	collect := func() {
 		for _, f := range []func() (Collector, error){
-			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
-			func() (Collector, error) { return NewZhihuCollector(client, db) },
-			func() (Collector, error) { return NewBilibiliCollector(client) },
+			//func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
+			//func() (Collector, error) { return NewZhihuCollector(db) }, //TODO
+			func() (Collector, error) { return NewBilibiliCollector(db) },
 		} {
 			collector, err := f()
 			if err != nil {

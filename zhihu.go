@@ -19,25 +19,23 @@ func init() {
 }
 
 type ZhihuCollector struct {
-	client *Client
-	xsrf   string
-	kv     KvStore
+	xsrf string
+	kv   KvStore
 }
 
-func NewZhihuCollector(client *Client, kv KvStore) (Collector, error) {
+func NewZhihuCollector(kv KvStore) (Collector, error) {
 	var xsrf string
 	if res := kv.KvGet("zhihu-xsrf"); res != nil {
 		xsrf = res.(string)
 	}
 	return &ZhihuCollector{
-		client: client,
-		kv:     kv,
-		xsrf:   xsrf,
+		kv:   kv,
+		xsrf: xsrf,
 	}, nil
 }
 
 func (z *ZhihuCollector) Login() error {
-	content, err := z.client.GetBytes("http://www.zhihu.com/#signin", nil)
+	content, err := GetBytes("http://www.zhihu.com/#signin")
 	if err != nil {
 		return err
 	}
@@ -53,7 +51,7 @@ func (z *ZhihuCollector) Login() error {
 	p("input zhihu password: ")
 	fmt.Scanf("%s", &pass)
 
-	resp, err := z.client.PostForm("http://www.zhihu.com/login", url.Values{
+	resp, err := PostForm("http://www.zhihu.com/login", url.Values{
 		"_xsrf":      {xsrf},
 		"email":      {user},
 		"password":   {pass},
@@ -86,7 +84,7 @@ func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
 	n := 10
 	// get content
 get:
-	resp, err := z.client.PostForm("http://www.zhihu.com/node/HomeFeedListV2", url.Values{
+	resp, err := PostForm("http://www.zhihu.com/node/HomeFeedListV2", url.Values{
 		"params": {s(`{"offset": 21, "start": "%s"}`, start)},
 		"method": {"next"},
 		"_xsrf":  {z.xsrf},
