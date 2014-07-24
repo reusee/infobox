@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"sync"
 )
 
 type Jar struct {
+	lock  sync.Mutex
 	Cache map[string]JarCacheEntry
 	jar   *cookiejar.Jar
 }
@@ -31,6 +33,8 @@ func NewJar() *Jar {
 }
 
 func (j *Jar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	j.lock.Lock()
+	defer j.lock.Unlock()
 	for _, cookie := range cookies {
 		j.Cache[s("%s %s", u.Host, cookie.Name)] = JarCacheEntry{
 			URL: URL{
