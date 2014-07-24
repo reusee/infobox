@@ -47,3 +47,9 @@ func (j *Jar) Cookies(u *url.URL) (ret []*http.Cookie) {
 	}
 	return
 }
+
+func (j *Jar) init() {
+	if j.Store == nil {
+		j.Store = make(map[string]map[string]*http.Cookie)
+	}
+}

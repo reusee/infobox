@@ -108,7 +108,7 @@ func main() {
 		}
 	}()
 
-	go NewReader(db)
+	//go NewReader(db)
 
 	// rss server
 	p("start rss server.\n")

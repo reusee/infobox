@@ -61,6 +61,7 @@ func NewDatabase(dbDir string) (*Database, error) {
 	if database.Kv == nil {
 		database.Kv = make(map[string]interface{})
 	}
+	database.Jar.init()
 	database.portLock = ln
 	p("database loaded.\n")
 	return &database, nil
