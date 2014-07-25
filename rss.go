@@ -30,8 +30,9 @@ func (d *Database) RssHandler(w http.ResponseWriter, req *http.Request) {
 	structure.Channel.Title = "Infobox"
 	structure.Channel.Link = "http://foo"
 
-	for i := len(d.Entries) - 1; i >= 0; i-- {
-		entry := d.Entries[i]
+	entries := <-d.GetEntries
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := entries[i]
 		item := entry.Entry.ToRssItem()
 		item.Pub = s("%v", entry.AddTime)
 		item.Guid = entry.Entry.GetKey()

@@ -37,6 +37,7 @@ type Database struct {
 	sigAddEntries chan []Entry
 	sigKvSet      chan kvInfo
 	sigKvGet      chan kvInfo
+	GetEntries    chan []Entry
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
@@ -83,6 +84,7 @@ func NewDatabase(dbDir string) (*Database, error) {
 	database.sigAddEntries = make(chan []Entry)
 	database.sigKvSet = make(chan kvInfo)
 	database.sigKvGet = make(chan kvInfo)
+	database.GetEntries = make(chan []Entry)
 
 	// start
 	go database.start()
@@ -102,6 +104,7 @@ func (d *Database) start() {
 			d.Kv[info.key] = info.value
 		case info := <-d.sigKvGet:
 			info.ret <- d.Kv[info.key]
+		case d.GetEntries <- d.Entries:
 		}
 	}
 }
