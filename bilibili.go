@@ -59,7 +59,7 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 		},
 	} {
 		maxPage := 10
-		sem := make(chan bool, 10)
+		sem := make(chan bool, 2)
 		wg := new(sync.WaitGroup)
 		wg.Add(maxPage)
 		lock := new(sync.Mutex)
