@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"text/template"
 
@@ -19,8 +20,9 @@ func init() {
 }
 
 type ZhihuCollector struct {
-	xsrf string
-	kv   KvStore
+	xsrf   string
+	kv     KvStore
+	cookie string
 }
 
 func NewZhihuCollector(kv KvStore) (Collector, error) {
@@ -28,14 +30,32 @@ func NewZhihuCollector(kv KvStore) (Collector, error) {
 	if res := kv.KvGet("zhihu-xsrf"); res != nil {
 		xsrf = res.(string)
 	}
-	return &ZhihuCollector{
+	z := &ZhihuCollector{
 		kv:   kv,
 		xsrf: xsrf,
-	}, nil
+	}
+	var cookie string
+	if res := kv.KvGet("zhihu-cookie"); res != nil {
+		cookie = res.(string)
+	}
+	if cookie == "" {
+		err := z.Login()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		z.cookie = cookie
+	}
+	return z, nil
 }
 
 func (z *ZhihuCollector) Login() error {
-	content, err := GetBytes("http://www.zhihu.com/#signin")
+	resp, err := Get("http://www.zhihu.com/#signin")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -44,25 +64,42 @@ func (z *ZhihuCollector) Login() error {
 		return Err("zhihu: cannot get xsrf value")
 	}
 	xsrf := string(res[1])
+	cookie := RespGetCookieStr(resp)
+	//p("=> %s\n", cookie)
 
 	var user, pass string
-	p("input zhihu username: ")
-	fmt.Scanf("%s", &user)
-	p("input zhihu password: ")
-	fmt.Scanf("%s", &pass)
+	if res := z.kv.KvGet("zhihu-username"); res != nil {
+		user = res.(string)
+	}
+	if res := z.kv.KvGet("zhihu-password"); res != nil {
+		pass = res.(string)
+	}
+	if user == "" || pass == "" {
+		p("input zhihu username: ")
+		fmt.Scanf("%s", &user)
+		p("input zhihu password: ")
+		fmt.Scanf("%s", &pass)
+		z.kv.KvSet("zhihu-username", user)
+		z.kv.KvSet("zhihu-password", pass)
+	}
 
-	resp, err := PostForm("http://www.zhihu.com/login", url.Values{
+	resp, err = PostFormWithCookie("http://www.zhihu.com/login", url.Values{
 		"_xsrf":      {xsrf},
 		"email":      {user},
 		"password":   {pass},
 		"rememberme": {"y"},
-	})
+	}, cookie)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	//io.Copy(os.Stdout, resp.Body)
+	cookie = RespGetCookieStr(resp)
+	//p("-> %s\n", cookie)
 	z.xsrf = xsrf
 	z.kv.KvSet("zhihu-xsrf", xsrf)
+	z.kv.KvSet("zhihu-cookie", cookie)
+	z.cookie = cookie
 
 	return nil
 }
@@ -84,11 +121,11 @@ func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
 	n := 10
 	// get content
 get:
-	resp, err := PostForm("http://www.zhihu.com/node/HomeFeedListV2", url.Values{
+	resp, err := PostFormWithCookie("http://www.zhihu.com/node/HomeFeedListV2", url.Values{
 		"params": {s(`{"offset": 21, "start": "%s"}`, start)},
 		"method": {"next"},
 		"_xsrf":  {z.xsrf},
-	})
+	}, z.cookie)
 	if err != nil {
 		return nil, err
 	}
