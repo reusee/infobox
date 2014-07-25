@@ -135,15 +135,19 @@ get:
 		return nil, z.Err("post %s %v", uri, err)
 	}
 	defer resp.Body.Close()
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, z.Err("read body %s %v", uri, err)
+	}
 
 	// parse
 	structure := struct {
 		R   int
 		Msg []string
 	}{}
-	err = json.NewDecoder(resp.Body).Decode(&structure)
+	err = json.NewDecoder(bytes.NewReader(content)).Decode(&structure)
 	if err != nil {
-		return nil, z.Err("decode json %s %v", uri, err)
+		return nil, z.Err("decode json %v %s", err, content)
 	}
 	if structure.R != 0 {
 		return nil, z.Err("json return non-zero")
