@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	_ "net/http/pprof"
 )
 
 func init() {
