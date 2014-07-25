@@ -109,7 +109,6 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 		return nil, b.Err("get timeline %s %v", url, err)
 	}
 	if bytes.Contains(data, []byte(`document.write("请先登录！");`)) {
-		p("bilibili need login\n")
 		return nil, bilibiliLoginError
 	}
 	data, err = tidyHtml(data)

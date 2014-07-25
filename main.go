@@ -90,7 +90,7 @@ func main() {
 	go func() {
 		for {
 			collect()
-			time.Sleep(time.Minute * 2)
+			time.Sleep(time.Minute * 5)
 		}
 	}()
 
