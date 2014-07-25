@@ -72,3 +72,17 @@ type KvStore interface {
 func Err(format string, args ...interface{}) error {
 	return errors.New(fmt.Sprintf(format, args...))
 }
+
+type ErrorHost struct {
+	prefix string
+}
+
+func NewErrorHost(prefix string) *ErrorHost {
+	return &ErrorHost{
+		prefix: prefix,
+	}
+}
+
+func (e *ErrorHost) Err(format string, args ...interface{}) error {
+	return errors.New(s("%s %s", e.prefix, s(format, args...)))
+}

@@ -25,11 +25,13 @@ func init() {
 type BilibiliCollector struct {
 	kv     KvStore
 	cookie string
+	*ErrorHost
 }
 
 func NewBilibiliCollector(kv KvStore) (*BilibiliCollector, error) {
 	b := &BilibiliCollector{
-		kv: kv,
+		kv:        kv,
+		ErrorHost: NewErrorHost("Bilibili"),
 	}
 	var cookie string
 	if res := b.kv.KvGet("bilibili-cookie"); res != nil {
@@ -87,7 +89,7 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 						}
 						return b.Collect()
 					} else {
-						return nil, Err("bilibili auth error")
+						return nil, b.Err("need login")
 					}
 				}
 				err = e
@@ -104,7 +106,7 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	url := fmt.Sprintf("http://www.bilibili.com/account/dynamic/dyn-%d", page)
 	data, err := GetBytesWithCookie(url, b.cookie)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("get timeline %s %v", url, err)
 	}
 	if bytes.Contains(data, []byte(`document.write("请先登录！");`)) {
 		p("bilibili need login\n")
@@ -112,7 +114,7 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	}
 	data, err = tidyHtml(data)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("tidy html %s %v", url, err)
 	}
 
 	// parse
@@ -142,7 +144,7 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	}{}
 	err = xml.Unmarshal(data, &structure)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("unmarshal html %s %v", url, err)
 	}
 
 	// collect
@@ -164,11 +166,11 @@ loop_lis:
 		case "专题 　添加了新的专题":
 			continue loop_lis
 		default:
-			return nil, Err("unknown message type %s", msgType)
+			return nil, b.Err("unknown entry type %s at %s", msgType, url)
 		}
 		id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
 		if err != nil {
-			return nil, Err("link without av id %s", link)
+			return nil, b.Err("link without av id %s at %s", link, url)
 		}
 		ret = append(ret, &BilibiliEntry{
 			Id:          id,
@@ -187,11 +189,11 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 	url := s(urlPattern, page)
 	data, err := GetBytesWithCookie(url, b.cookie)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("get newest page %s %v", url, err)
 	}
 	data, err = tidyHtml(data)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("tidy html %s %v", url, err)
 	}
 
 	// parse
@@ -218,7 +220,7 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 	}{}
 	err = xml.Unmarshal(data, &structure)
 	if err != nil {
-		return nil, err
+		return nil, b.Err("unmarshal html %s %v", url, err)
 	}
 	var ul Ul
 	var ok bool
@@ -228,7 +230,7 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 		}
 		return false
 	}).(Ul); !ok {
-		return nil, Err("no ul found")
+		return nil, b.Err("no ul found at %s", url)
 	}
 
 	// collect
@@ -236,7 +238,7 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 		link := "http://www.bilibili.com" + li.As[0].Href
 		id, err := strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
 		if err != nil {
-			return nil, Err("link without av id %s", link)
+			return nil, b.Err("link without av id %s at %s", link, url)
 		}
 		title := li.As[1].Text
 		image := li.As[0].Img.Src
@@ -289,19 +291,21 @@ func (e *BilibiliEntry) ToHtml() string {
 
 func (b *BilibiliCollector) Login() error {
 	// get cookie
-	cookie, err := GetCookieStr("https://secure.bilibili.com/login")
+	uri := "https://secure.bilibili.com/login"
+	cookie, err := GetCookieStr(uri)
 	if err != nil {
-		return err
+		return b.Err("get %s %v", uri, err)
 	}
 
 	// get captcha
-	resp, err := GetWithCookie("https://secure.bilibili.com/captcha?r=0.43428630707785487", cookie)
+	uri = "https://secure.bilibili.com/captcha?r=0.43428630707785487"
+	resp, err := GetWithCookie(uri, cookie)
 	if err != nil {
-		return err
+		return b.Err("get %s %v", uri, err)
 	}
 	f, err := ioutil.TempFile(os.TempDir(), "")
 	if err != nil {
-		return err
+		return b.Err("create temp file %v", err)
 	}
 	io.Copy(f, resp.Body)
 	f.Close()
@@ -329,7 +333,8 @@ func (b *BilibiliCollector) Login() error {
 	}
 
 	// post login form
-	resp, err = PostFormWithCookie("https://secure.bilibili.com/login", url.Values{
+	uri = "https://secure.bilibili.com/login"
+	resp, err = PostFormWithCookie(uri, url.Values{
 		"act":      {"login"},
 		"gourl":    {"http://www.bilibili.com/account/dynamic"},
 		"keeptime": {"2592000"},
@@ -338,15 +343,15 @@ func (b *BilibiliCollector) Login() error {
 		"vdcode":   {code},
 	}, cookie)
 	if err != nil {
-		return err
+		return b.Err("post %s %v", uri, err)
 	}
 	defer resp.Body.Close()
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return b.Err("read body %s %v", uri, err)
 	}
 	if !bytes.Contains(content, []byte(`document.write("成功登录，现在转向指定页面...");`)) {
-		return Err("bilibili login failed")
+		return b.Err("login fail")
 	}
 	cookie = RespGetCookieStr(resp)
 	p("bilibili cookie => %s\n", cookie)

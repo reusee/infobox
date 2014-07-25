@@ -20,9 +20,14 @@ func init() {
 
 type DoubanCollector struct {
 	client *http.Client
+	*ErrorHost
 }
 
 func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
+	c := &DoubanCollector{
+		ErrorHost: NewErrorHost("Douban"),
+	}
+
 	// oauth config
 	config := &oauth.Config{
 		ClientId:     "07f3402dcfdf369d17d9c0896f9da3d7",
@@ -44,7 +49,7 @@ func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
 		fmt.Scanf("%s", &code)
 		token, err = transport.Exchange(code)
 		if err != nil {
-			return Err("exchange douban token %v", err)
+			return c.Err("exchange token %v", err)
 		}
 		return nil
 	}
@@ -59,20 +64,19 @@ func NewDoubanCollector(tokenCache oauth.Cache) (Collector, error) {
 		}
 	}
 	transport.Token = token
-	c := &DoubanCollector{
-		client: transport.Client(),
-	}
+	c.client = transport.Client()
 
 	// ping
 validate:
-	resp, err := c.client.Get("https://api.douban.com/v2/user/~me")
+	uri := "https://api.douban.com/v2/user/~me"
+	resp, err := c.client.Get(uri)
 	if err != nil {
-		return nil, err
+		return nil, c.Err("get %s %v", uri, err)
 	}
 	defer resp.Body.Close()
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, c.Err("read body %s %v", uri, err)
 	}
 	var ret struct {
 		Msg  string
@@ -126,12 +130,12 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 		perPage, i*perPage)
 	resp, err := d.client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, d.Err("get %s %v", url, err)
 	}
 	defer resp.Body.Close()
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, d.Err("read body %s %v", url, err)
 	}
 
 	//buf := new(bytes.Buffer)
@@ -141,7 +145,18 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 	var result []*DoubanEntry
 	err = json.Unmarshal(content, &result)
 	if err != nil {
-		return nil, err
+		// try to unmarshal as error message
+		var msg struct {
+			Msg     string
+			Code    int
+			Request string
+		}
+		err = json.Unmarshal(content, &msg)
+		if err != nil {
+			return nil, d.Err("unmarshal %v %s", err, content)
+		} else {
+			return nil, d.Err("api error %s %s", msg.Msg, msg.Request)
+		}
 	}
 	for _, entry := range result {
 		ret = append(ret, entry)

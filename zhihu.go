@@ -23,6 +23,7 @@ type ZhihuCollector struct {
 	xsrf   string
 	kv     KvStore
 	cookie string
+	*ErrorHost
 }
 
 func NewZhihuCollector(kv KvStore) (Collector, error) {
@@ -31,8 +32,9 @@ func NewZhihuCollector(kv KvStore) (Collector, error) {
 		xsrf = res.(string)
 	}
 	z := &ZhihuCollector{
-		kv:   kv,
-		xsrf: xsrf,
+		kv:        kv,
+		xsrf:      xsrf,
+		ErrorHost: NewErrorHost("Zhihu"),
 	}
 	var cookie string
 	if res := kv.KvGet("zhihu-cookie"); res != nil {
@@ -50,18 +52,19 @@ func NewZhihuCollector(kv KvStore) (Collector, error) {
 }
 
 func (z *ZhihuCollector) Login() error {
-	resp, err := Get("http://www.zhihu.com/#signin")
+	uri := "http://www.zhihu.com/#signin"
+	resp, err := Get(uri)
 	if err != nil {
-		return err
+		return z.Err("get %s %v", uri, err)
 	}
 	defer resp.Body.Close()
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return z.Err("read body %s %v", uri, err)
 	}
 	res := regexp.MustCompile(`<input type="hidden" name="_xsrf" value="([^"]+)"/>`).FindSubmatch(content)
 	if len(res) == 0 {
-		return Err("zhihu: cannot get xsrf value")
+		return z.Err("no xsrf value in page")
 	}
 	xsrf := string(res[1])
 	cookie := RespGetCookieStr(resp)
@@ -83,14 +86,15 @@ func (z *ZhihuCollector) Login() error {
 		z.kv.KvSet("zhihu-password", pass)
 	}
 
-	resp, err = PostFormWithCookie("http://www.zhihu.com/login", url.Values{
+	uri = "http://www.zhihu.com/login"
+	resp, err = PostFormWithCookie(uri, url.Values{
 		"_xsrf":      {xsrf},
 		"email":      {user},
 		"password":   {pass},
 		"rememberme": {"y"},
 	}, cookie)
 	if err != nil {
-		return err
+		return z.Err("post %s %v", uri, err)
 	}
 	defer resp.Body.Close()
 	//io.Copy(os.Stdout, resp.Body)
@@ -113,7 +117,7 @@ func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
 		if InteractiveMode {
 			z.Login()
 		} else {
-			return nil, Err("zhihu auth error")
+			return nil, z.Err("need login")
 		}
 	}
 
@@ -121,13 +125,14 @@ func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
 	n := 10
 	// get content
 get:
-	resp, err := PostFormWithCookie("http://www.zhihu.com/node/HomeFeedListV2", url.Values{
+	uri := "http://www.zhihu.com/node/HomeFeedListV2"
+	resp, err := PostFormWithCookie(uri, url.Values{
 		"params": {s(`{"offset": 21, "start": "%s"}`, start)},
 		"method": {"next"},
 		"_xsrf":  {z.xsrf},
 	}, z.cookie)
 	if err != nil {
-		return nil, err
+		return nil, z.Err("post %s %v", uri, err)
 	}
 	defer resp.Body.Close()
 
@@ -138,38 +143,38 @@ get:
 	}{}
 	err = json.NewDecoder(resp.Body).Decode(&structure)
 	if err != nil {
-		return nil, err
+		return nil, z.Err("decode json %s %v", uri, err)
 	}
 	if structure.R != 0 {
-		return nil, Err("return non-zero")
+		return nil, z.Err("json return non-zero")
 	}
 
 	// collect
 	for _, msg := range structure.Msg {
 		html, err := tidyHtml([]byte(msg))
 		if err != nil {
-			return nil, err
+			return nil, z.Err("tidy html %v", err)
 		}
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(html))
 		if err != nil {
-			return nil, err
+			return nil, z.Err("new goquery document %v", err)
 		}
 		titleA := doc.Find("div.content h2 a")
 		title := titleA.Text()
 		if title == "" {
-			return nil, Err("no title")
+			return nil, z.Err("no title found")
 		}
 		body := doc.Find("div.content div.entry-body")
 		content := body.Text()
 		_ = content
 		id, ok := doc.Find("div.feed-item").Attr("id")
 		if !ok {
-			return nil, Err("no id")
+			return nil, z.Err("no id found")
 		}
 		start = strings.Replace(id, "feed-", "", -1)
 		link, ok := doc.Find("div.content h2 a").Attr("href")
 		if !ok {
-			return nil, Err("no link")
+			return nil, z.Err("no link found")
 		}
 		if !strings.HasPrefix(link, "http") {
 			link = "http://www.zhihu.com" + link
