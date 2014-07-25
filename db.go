@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
@@ -19,6 +18,12 @@ type Item struct {
 	Read    bool
 }
 
+type kvInfo struct {
+	key   string
+	value interface{}
+	ret   chan interface{}
+}
+
 type Database struct {
 	Entries     []*Item
 	Set         map[string]struct{}
@@ -27,16 +32,23 @@ type Database struct {
 	OAuthTokens map[string]*oauth.Token
 	portLock    net.Listener
 	Kv          map[string]interface{}
-	kvLock      sync.Mutex
+
+	sigSave       chan chan error
+	sigAddEntries chan []Entry
+	sigKvSet      chan kvInfo
+	sigKvGet      chan kvInfo
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
+	// port lock
 	ln, err := net.Listen("tcp", "127.0.0.1:53892")
 	if err != nil {
 		return nil, Err("database lock fail")
 	} else {
 		p("db locked.\n")
 	}
+
+	// load data from file
 	dbPath := filepath.Join(dbDir, "db")
 	f, err := os.Open(dbPath)
 	if err != nil { // no file or error, create new database
@@ -56,6 +68,8 @@ func NewDatabase(dbDir string) (*Database, error) {
 	if err != nil {
 		return nil, Err("gob decode %v", err)
 	}
+
+	// init
 	database.dbPath = dbPath
 	if database.OAuthTokens == nil {
 		database.OAuthTokens = make(map[string]*oauth.Token)
@@ -65,11 +79,40 @@ func NewDatabase(dbDir string) (*Database, error) {
 	}
 	database.Jar.init()
 	database.portLock = ln
+	database.sigSave = make(chan chan error)
+	database.sigAddEntries = make(chan []Entry)
+	database.sigKvSet = make(chan kvInfo)
+	database.sigKvGet = make(chan kvInfo)
+
+	// start
+	go database.start()
+
 	p("database loaded.\n")
 	return &database, nil
 }
 
+func (d *Database) start() {
+	for {
+		select {
+		case ret := <-d.sigSave:
+			ret <- d.save()
+		case entries := <-d.sigAddEntries:
+			d.addEntries(entries)
+		case info := <-d.sigKvSet:
+			d.Kv[info.key] = info.value
+		case info := <-d.sigKvGet:
+			info.ret <- d.Kv[info.key]
+		}
+	}
+}
+
 func (d *Database) Save() error {
+	ret := make(chan error)
+	d.sigSave <- ret
+	return <-ret
+}
+
+func (d *Database) save() error {
 	if len(d.dbPath) == 0 {
 		panic("no dbPath")
 	}
@@ -92,6 +135,10 @@ func (d *Database) Save() error {
 }
 
 func (d *Database) AddEntries(entries []Entry) {
+	d.sigAddEntries <- entries
+}
+
+func (d *Database) addEntries(entries []Entry) {
 	for _, entry := range entries {
 		key := entry.GetKey()
 		if _, ok := d.Set[key]; !ok {
@@ -104,14 +151,18 @@ func (d *Database) AddEntries(entries []Entry) {
 	}
 }
 
-func (d *Database) KvGet(key string) interface{} {
-	d.kvLock.Lock()
-	defer d.kvLock.Unlock()
-	return d.Kv[key]
+func (d *Database) KvSet(key string, value interface{}) {
+	d.sigKvSet <- kvInfo{
+		key:   key,
+		value: value,
+	}
 }
 
-func (d *Database) KvSet(key string, value interface{}) {
-	d.kvLock.Lock()
-	defer d.kvLock.Unlock()
-	d.Kv[key] = value
+func (d *Database) KvGet(key string) interface{} {
+	ret := make(chan interface{})
+	d.sigKvGet <- kvInfo{
+		key: key,
+		ret: ret,
+	}
+	return <-ret
 }
