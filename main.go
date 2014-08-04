@@ -62,7 +62,7 @@ func main() {
 	// collect
 	collect := func() {
 		for _, f := range []func() (Collector, error){
-			func() (Collector, error) { return NewZhihuCollector(db) },
+			//func() (Collector, error) { return NewZhihuCollector(db) },
 			func() (Collector, error) { return NewBilibiliCollector(db) },
 			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
 		} {
