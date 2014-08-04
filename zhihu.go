@@ -109,9 +109,7 @@ func (z *ZhihuCollector) Login() error {
 }
 
 func (z *ZhihuCollector) Collect() (ret []Entry, err error) {
-	if InteractiveMode {
-		z.Login()
-	}
+	z.Login()
 	if z.xsrf == "" {
 		p("zhihu: no xsrf.\n")
 		if InteractiveMode {
