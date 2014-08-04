@@ -37,7 +37,7 @@ type Database struct {
 	sigAddEntries chan []Entry
 	sigKvSet      chan kvInfo
 	sigKvGet      chan kvInfo
-	GetEntries    chan []Entry
+	GetEntries    chan []*Item
 }
 
 func NewDatabase(dbDir string) (*Database, error) {
@@ -84,7 +84,7 @@ func NewDatabase(dbDir string) (*Database, error) {
 	database.sigAddEntries = make(chan []Entry)
 	database.sigKvSet = make(chan kvInfo)
 	database.sigKvGet = make(chan kvInfo)
-	database.GetEntries = make(chan []Entry)
+	database.GetEntries = make(chan []*Item)
 
 	// start
 	go database.start()
@@ -125,11 +125,11 @@ func (d *Database) save() error {
 	if err != nil {
 		return Err("temp db %v", err)
 	}
+	defer tmpF.Close()
 	err = gob.NewEncoder(tmpF).Encode(d)
 	if err != nil {
 		return Err("encode db %v", err)
 	}
-	tmpF.Close()
 	err = os.Rename(tmpPath, d.dbPath)
 	if err != nil {
 		return Err("rename temp db %v", err)
