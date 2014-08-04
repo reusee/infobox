@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/reusee/hns"
 )
 
 func init() {
@@ -111,73 +112,46 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	if bytes.Contains(data, []byte(`document.write("请先登录！");`)) {
 		return nil, bilibiliLoginError
 	}
-	data, err = tidyHtml(data)
+
+	root, err := hns.ParseBytes(data)
 	if err != nil {
-		return nil, b.Err("tidy html %s %v", url, err)
+		return nil, err
 	}
 
-	// parse
-	structure := struct {
-		Body struct {
-			Lis []struct {
-				Divs []struct {
-					Class string `xml:"class,attr"`
-					A     []struct {
-						Href string `xml:"href,attr"`
-						Card string `xml:"card,attr"`
-						Img  struct {
-							Src string `xml:"src,attr"`
-						} `xml:"img"`
-						Text string `xml:",chardata"`
-					} `xml:"a"`
-					Text string `xml:",chardata"`
-				} `xml:"div"`
-				Tags []struct {
-					A struct {
-						Href string `xml:"href,attr"`
-						Text string `xml:",chardata"`
-					} `xml:"a"`
-				} `xml:"ul>li"`
-			} `xml:"li"`
-		} `xml:"body"`
-	}{}
-	err = xml.Unmarshal(data, &structure)
-	if err != nil {
-		return nil, b.Err("unmarshal html %s %v", url, err)
-	}
-
-	// collect
-loop_lis:
-	for _, li := range structure.Body.Lis {
-		var link, title, image, desc string
-		var id int
-		image = li.Divs[0].A[0].Img.Src
-		msgType := strings.TrimSpace(li.Divs[1].Text)
-		switch msgType {
-		case "上传了新视频":
-			link = li.Divs[0].A[0].Href
-			title = li.Divs[1].A[1].Text
-			desc = strings.TrimSpace(li.Divs[2].Text)
-		case "专题 　添加了新的视频", "专题 　添加了新的新番":
-			link = "http://www.bilibili.com" + li.Divs[1].A[1].Href
-			title = li.Divs[1].A[1].Text
-			desc = strings.TrimSpace(li.Divs[2].Text)
-		case "专题 　添加了新的专题":
-			continue loop_lis
-		default:
-			return nil, b.Err("unknown entry type %s at %s", msgType, url)
-		}
-		id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
-		if err != nil {
-			return nil, b.Err("link without av id %s at %s", link, url)
-		}
-		ret = append(ret, &BilibiliEntry{
-			Id:          id,
-			Link:        link,
-			Title:       title,
-			Image:       image,
-			Description: desc,
-		})
+	var image, msgType, link, title, desc string
+	var id int
+	var walkErr error
+	root.Walk(hns.Css("li", hns.Multi(
+		hns.Css("img.preview", hns.Do(func(n *hns.Node) {
+			image = n.Attr["src"]
+		})),
+		hns.Css("div.t", hns.Do(func(n *hns.Node) {
+			msgType = n.Text
+		})),
+		hns.Css("a.vt", hns.Do(func(n *hns.Node) {
+			title = n.Text
+			link = n.Attr["href"]
+		})),
+		hns.Css("div.content", hns.Do(func(n *hns.Node) {
+			desc = strings.TrimSpace(n.Text)
+		})),
+		hns.Do(func(node *hns.Node) {
+			id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
+			if err != nil {
+				walkErr = b.Err("link without av id %s at %s", link, url)
+				return
+			}
+			ret = append(ret, &BilibiliEntry{
+				Id:          id,
+				Link:        link,
+				Title:       title,
+				Image:       image,
+				Description: desc,
+			})
+		}),
+	)))
+	if walkErr != nil {
+		return nil, walkErr
 	}
 
 	return
@@ -186,67 +160,43 @@ loop_lis:
 func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []Entry, err error) {
 	// get content
 	url := s(urlPattern, page)
-	data, err := GetBytesWithCookie(url, b.cookie)
+	resp, err := GetWithCookie(url, b.cookie)
 	if err != nil {
 		return nil, b.Err("get newest page %s %v", url, err)
 	}
-	data, err = tidyHtml(data)
+	defer resp.Body.Close()
+	root, err := hns.Parse(resp.Body)
 	if err != nil {
-		return nil, b.Err("tidy html %s %v", url, err)
+		return nil, b.Err("parse html %v", err)
 	}
 
-	// parse
-	type Ul struct {
-		Lis []struct {
-			As []struct {
-				Href string `xml:"href,attr"`
-				Img  struct {
-					Src string `xml:"src,attr"`
-				} `xml:"img"`
-				Text string `xml:",chardata"`
-			} `xml:"a"`
-		} `xml:"li"`
-		Class string `xml:"class,attr"`
-	}
-	type Div struct {
-		Divs []Div `xml:"div"`
-		Ul   []Ul  `xml:"ul"`
-	}
-	structure := struct {
-		Body struct {
-			Divs []Div `xml:"div"`
-		} `xml:"body"`
-	}{}
-	err = xml.Unmarshal(data, &structure)
-	if err != nil {
-		return nil, b.Err("unmarshal html %s %v", url, err)
-	}
-	var ul Ul
-	var ok bool
-	if ul, ok = find(structure, func(i interface{}) bool {
-		if ul, ok := i.(Ul); ok && ul.Class == "vd_list" {
-			return true
-		}
-		return false
-	}).(Ul); !ok {
-		return nil, b.Err("no ul found at %s", url)
-	}
-
-	// collect
-	for _, li := range ul.Lis {
-		link := "http://www.bilibili.com" + li.As[0].Href
-		id, err := strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
-		if err != nil {
-			return nil, b.Err("link without av id %s at %s", link, url)
-		}
-		title := li.As[1].Text
-		image := li.As[0].Img.Src
-		ret = append(ret, &BilibiliEntry{
-			Id:    id,
-			Link:  link,
-			Title: title,
-			Image: image,
-		})
+	var link, title, image string
+	var id int
+	var walkErr error
+	root.Walk(hns.Css("ul.vd_list li", hns.Multi(
+		hns.Css("a.title", hns.Do(func(n *hns.Node) {
+			link = "http://www.bilibili.com" + n.Attr["href"]
+			title = n.Text
+		})),
+		hns.Css("a.preview img", hns.Do(func(n *hns.Node) {
+			image = n.Attr["src"]
+		})),
+		hns.Do(func(node *hns.Node) {
+			id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
+			if err != nil {
+				walkErr = b.Err("link without av id %s at %s", link, url)
+				return
+			}
+			ret = append(ret, &BilibiliEntry{
+				Id:    id,
+				Link:  link,
+				Title: title,
+				Image: image,
+			})
+		}),
+	)))
+	if walkErr != nil {
+		return nil, walkErr
 	}
 
 	return
