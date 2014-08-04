@@ -68,9 +68,9 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 		lock := new(sync.Mutex)
 		errors := make([]error, 0, maxPage)
 		for page := 1; page <= maxPage; page++ {
+			sem <- true
 			go func(page int) {
 				defer wg.Done()
-				sem <- true
 				entries, err := fun(page)
 				lock.Lock()
 				ret = append(ret, entries...)

@@ -33,6 +33,7 @@ func NewV2exCollector() (*V2exCollector, error) {
 func (v *V2exCollector) Collect() (ret []Entry, err error) {
 	nodes := []string{
 		"share",
+		"create",
 	}
 	maxPage := 10
 	var uris []string
@@ -42,15 +43,15 @@ func (v *V2exCollector) Collect() (ret []Entry, err error) {
 		}
 	}
 
-	sem := make(chan bool, 8)
+	sem := make(chan bool, 4)
 	wg := new(sync.WaitGroup)
 	wg.Add(len(uris))
 	lock := new(sync.Mutex)
 	errors := make([]error, 0, len(uris))
 	for i, uri := range uris {
+		sem <- true
 		go func(i int, uri string) {
 			defer wg.Done()
-			sem <- true
 			entries, err := v.CollectPage(uri)
 			lock.Lock()
 			ret = append(ret, entries...)
