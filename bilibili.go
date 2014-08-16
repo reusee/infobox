@@ -16,7 +16,7 @@ import (
 	"sync"
 	"text/template"
 
-	"github.com/reusee/hns"
+	"github.com/reusee/nw"
 )
 
 func init() {
@@ -61,7 +61,7 @@ func (b *BilibiliCollector) Collect() (ret []Entry, err error) {
 			return b.CollectNewest("http://www.bilibili.com/video/douga-else-information-%d.html", page)
 		},
 	} {
-		maxPage := 10
+		maxPage := 20
 		sem := make(chan bool, 2)
 		wg := new(sync.WaitGroup)
 		wg.Add(maxPage)
@@ -113,7 +113,7 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 		return nil, bilibiliLoginError
 	}
 
-	root, err := hns.ParseBytes(data)
+	root, err := nw.ParseBytes(data)
 	if err != nil {
 		return nil, err
 	}
@@ -121,21 +121,24 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 	var image, msgType, link, title, desc string
 	var id int
 	var walkErr error
-	root.Walk(hns.Css("li", hns.Multi(
-		hns.Css("img.preview", hns.Do(func(n *hns.Node) {
+	root.Walk(nw.Css("li", nw.Multi(
+		nw.Css("img.preview", func(n *nw.Node) {
 			image = n.Attr["src"]
-		})),
-		hns.Css("div.t", hns.Do(func(n *hns.Node) {
+		}),
+		nw.Css("div.t", func(n *nw.Node) {
 			msgType = n.Text
-		})),
-		hns.Css("a.vt", hns.Do(func(n *hns.Node) {
+		}),
+		nw.Css("a.vt", func(n *nw.Node) {
 			title = n.Text
 			link = n.Attr["href"]
-		})),
-		hns.Css("div.content", hns.Do(func(n *hns.Node) {
+			if !strings.HasPrefix(link, "http") {
+				link = "http://www.bilibili.com" + link
+			}
+		}),
+		nw.Css("div.content", func(n *nw.Node) {
 			desc = strings.TrimSpace(n.Text)
-		})),
-		hns.Do(func(node *hns.Node) {
+		}),
+		func(node *nw.Node) {
 			id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
 			if err != nil {
 				walkErr = b.Err("link without av id %s at %s", link, url)
@@ -148,7 +151,7 @@ func (b *BilibiliCollector) CollectTimeline(page int) (ret []Entry, err error) {
 				Image:       image,
 				Description: desc,
 			})
-		}),
+		},
 	)))
 	if walkErr != nil {
 		return nil, walkErr
@@ -165,7 +168,7 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 		return nil, b.Err("get newest page %s %v", url, err)
 	}
 	defer resp.Body.Close()
-	root, err := hns.Parse(resp.Body)
+	root, err := nw.Parse(resp.Body)
 	if err != nil {
 		return nil, b.Err("parse html %v", err)
 	}
@@ -173,15 +176,15 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 	var link, title, image string
 	var id int
 	var walkErr error
-	root.Walk(hns.Css("ul.vd_list li", hns.Multi(
-		hns.Css("a.title", hns.Do(func(n *hns.Node) {
+	root.Walk(nw.Css("ul.vd_list li", nw.Multi(
+		nw.Css("a.title", func(n *nw.Node) {
 			link = "http://www.bilibili.com" + n.Attr["href"]
 			title = n.Text
-		})),
-		hns.Css("a.preview img", hns.Do(func(n *hns.Node) {
+		}),
+		nw.Css("a.preview img", func(n *nw.Node) {
 			image = n.Attr["src"]
-		})),
-		hns.Do(func(node *hns.Node) {
+		}),
+		func(node *nw.Node) {
 			id, err = strconv.Atoi(regexp.MustCompile(`av([0-9]+)`).FindStringSubmatch(link)[1])
 			if err != nil {
 				walkErr = b.Err("link without av id %s at %s", link, url)
@@ -193,7 +196,7 @@ func (b *BilibiliCollector) CollectNewest(urlPattern string, page int) (ret []En
 				Title: title,
 				Image: image,
 			})
-		}),
+		},
 	)))
 	if walkErr != nil {
 		return nil, walkErr

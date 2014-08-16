@@ -14,6 +14,13 @@ import (
 	"code.google.com/p/goauth2/oauth"
 )
 
+var ignoreUsers = []string{
+	"rubysola",
+	"naomi-wang",
+	"foxy",
+	"mia1612",
+}
+
 func init() {
 	gob.Register(new(DoubanEntry))
 }
@@ -158,7 +165,13 @@ func (d *DoubanCollector) CollectTimeline(i int) (ret []Entry, err error) {
 			return nil, d.Err("api error %s %s", msg.Msg, msg.Request)
 		}
 	}
+loop:
 	for _, entry := range result {
+		for _, name := range ignoreUsers {
+			if entry.User.Uid == name {
+				continue loop
+			}
+		}
 		ret = append(ret, entry)
 	}
 

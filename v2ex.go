@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/reusee/hns"
+	"github.com/reusee/nw"
 )
 
 func init() {
@@ -35,7 +35,7 @@ func (v *V2exCollector) Collect() (ret []Entry, err error) {
 		"share",
 		"create",
 	}
-	maxPage := 10
+	maxPage := 5
 	var uris []string
 	for _, node := range nodes {
 		for page := 1; page <= maxPage; page++ {
@@ -43,7 +43,7 @@ func (v *V2exCollector) Collect() (ret []Entry, err error) {
 		}
 	}
 
-	sem := make(chan bool, 4)
+	sem := make(chan bool, 2)
 	wg := new(sync.WaitGroup)
 	wg.Add(len(uris))
 	lock := new(sync.Mutex)
@@ -80,13 +80,13 @@ func (v *V2exCollector) CollectPage(uri string) (ret []Entry, err error) {
 		return nil, v.Err("get %s error: %v", uri, err)
 	}
 	defer resp.Body.Close()
-	root, err := hns.Parse(resp.Body)
+	root, err := nw.Parse(resp.Body)
 	if err != nil {
 		return nil, v.Err("parse html %s: %v", uri, err)
 	}
 
 	var walkError error
-	root.Walk(hns.Css("div.cell span.item_title a", hns.Do(func(n *hns.Node) {
+	root.Walk(nw.Css("div.cell span.item_title a", func(n *nw.Node) {
 		id, err := strconv.Atoi(v2exPidPattern.FindStringSubmatch(n.Attr["href"])[1])
 		if err != nil {
 			walkError = v.Err("no post id: %s", uri)
@@ -96,9 +96,9 @@ func (v *V2exCollector) CollectPage(uri string) (ret []Entry, err error) {
 			Id:    id,
 			Title: n.Text,
 		})
-	})))
+	}))
 	if walkError != nil {
-		return nil, walkError
+		err = walkError
 	}
 
 	return
