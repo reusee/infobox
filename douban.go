@@ -14,12 +14,7 @@ import (
 	"code.google.com/p/goauth2/oauth"
 )
 
-var ignoreUsers = []string{
-	"rubysola",
-	"naomi-wang",
-	"foxy",
-	"mia1612",
-}
+var ignoreUsers = []string{}
 
 func init() {
 	gob.Register(new(DoubanEntry))
