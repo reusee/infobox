@@ -5,8 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -49,24 +47,6 @@ func main() {
 		}
 	}
 
-	// init database
-	user, err := user.Current()
-	if err != nil {
-		log.Fatal(err)
-	}
-	dbDir := filepath.Join(user.HomeDir, ".infobox")
-	_, err = os.Stat(dbDir)
-	if err != nil {
-		err = os.Mkdir(dbDir, 0777)
-		if err != nil {
-			log.Fatal("create db dir %v", err)
-		}
-	}
-	db, err := NewDatabase(dbDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// init gobchest client
 	client, err := gobchest.NewClient("localhost:2800")
 	if err != nil {
@@ -84,7 +64,10 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			client.SetAdd("infobox.entry-keys", key)
+			err = client.SetAdd("infobox.entry-keys", key)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
@@ -92,7 +75,6 @@ func main() {
 	collect := func() {
 		for _, f := range []func() (Collector, error){
 			func() (Collector, error) { return NewV2exCollector() },
-			//func() (Collector, error) { return NewZhihuCollector(NewKvStore(client)) },
 			func() (Collector, error) { return NewBilibiliCollector(NewKvStore(client)) },
 			func() (Collector, error) {
 				return NewDoubanCollector(NewOAuthTokenCache(client, "infobox.douban.oauthtoken"))
@@ -105,21 +87,13 @@ func main() {
 			entries, err := collector.Collect()
 			if err != nil {
 				// insert error report entry
-				db.AddEntries([]Entry{
-					NewErrorEntry(err),
-				})
 				p("%v\n", err)
 				addEntry(NewErrorEntry(err))
 				continue
 			}
-			db.AddEntries(entries)
 			for _, e := range entries {
 				addEntry(e)
 			}
-		}
-		// save
-		if err := db.Save(); err != nil {
-			log.Fatal(err)
 		}
 	}
 
