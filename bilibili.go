@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 
 	"github.com/reusee/nw"
 )
@@ -215,30 +214,6 @@ type BilibiliEntry struct {
 
 func (e *BilibiliEntry) GetKey() string {
 	return fmt.Sprintf("bilibili %d", e.Id)
-}
-
-func (e *BilibiliEntry) ToRssItem() RssItem {
-	return RssItem{
-		Title:  e.Title,
-		Link:   e.Link,
-		Desc:   e.Description,
-		Author: "Bilibili",
-	}
-}
-
-var bilibiliHtmlTemplate = template.Must(template.New("bilibili").Parse(`
-<h2>Bilibili</h2>
-<p>{{.Title}}</p>
-<p>{{.Description}}</p>
-`))
-
-func (e *BilibiliEntry) ToHtml() string {
-	buf := new(bytes.Buffer)
-	err := bilibiliHtmlTemplate.Execute(buf, e)
-	if err != nil {
-		return s("render error %v", err)
-	}
-	return string(buf.Bytes())
 }
 
 func (b *BilibiliCollector) Login() error {

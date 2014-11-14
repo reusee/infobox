@@ -107,15 +107,3 @@ func (v *V2exCollector) CollectPage(uri string) (ret []Entry, err error) {
 func (v *V2exEntry) GetKey() string {
 	return fmt.Sprintf("v2ex %d", v.Id)
 }
-
-func (v *V2exEntry) ToHtml() string {
-	return "" //TODO
-}
-
-func (v *V2exEntry) ToRssItem() RssItem {
-	return RssItem{
-		Title:  v.Title,
-		Link:   fmt.Sprintf("http://v2ex.com/t/%d", v.Id),
-		Author: "V2ex",
-	}
-}

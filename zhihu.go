@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
-	"text/template"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -206,28 +205,4 @@ type ZhihuEntry struct {
 
 func (z *ZhihuEntry) GetKey() string {
 	return s("zhihu %s", z.Id)
-}
-
-func (z *ZhihuEntry) ToRssItem() RssItem {
-	return RssItem{
-		Title:  z.Title,
-		Link:   z.Link,
-		Desc:   z.Content,
-		Author: "Zhihu",
-	}
-}
-
-var zhihuHtmlTemplate = template.Must(template.New("zhihu").Parse(`
-<h2>Zhihu</h2>
-<p>{{.Title}}</p>
-<div>{{.Content}}</div>
-`))
-
-func (z *ZhihuEntry) ToHtml() string {
-	buf := new(bytes.Buffer)
-	err := zhihuHtmlTemplate.Execute(buf, z)
-	if err != nil {
-		return s("render error %v", err)
-	}
-	return string(buf.Bytes())
 }

@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"sync"
 
 	"code.google.com/p/goauth2/oauth"
@@ -200,49 +197,6 @@ type DoubanEntry struct {
 
 func (d DoubanEntry) GetKey() string {
 	return s("douban %d", d.Id)
-}
-
-func (d *DoubanEntry) ToRssItem() RssItem {
-	parts := d.collectParts()
-	return RssItem{
-		Title:  strings.Join(parts, " - "),
-		Link:   s("http://www.douban.com/people/%s/status/%d/", d.User.Uid, d.Id),
-		Desc:   strings.Join(parts, " - "),
-		Author: "Douban",
-	}
-}
-
-var doubanHtmllTemplate = template.Must(template.New("douban").Parse(`
-<h2>Douban</h2>
-<p>{{.User.Name}}</p>
-<p>{{.Title}}</p>
-{{range $index, $elem := .Attachments}}
-<div class="attachment">
-	<p>{{$elem.Title}}</p>
-	<p>{{$elem.Description}}</p>
-	{{range $i, $e := $elem.Media}}
-		{{if eq $e.Type "image"}}
-		<p><img src="{{$e.Src}}" /></p>
-		{{end}}
-	{{end}}
-</div>
-{{end}}
-<p>{{.Text}}</p>
-`))
-
-func (d *DoubanEntry) ToHtml() string {
-	buf := new(bytes.Buffer)
-	err := doubanHtmllTemplate.Execute(buf, d)
-	if err != nil {
-		return s("render error %v", err)
-	}
-	if d.Reshared != nil {
-		err := doubanHtmllTemplate.Execute(buf, d.Reshared)
-		if err != nil {
-			return s("render error %v", err)
-		}
-	}
-	return string(buf.Bytes())
 }
 
 func (d *DoubanEntry) collectParts() []string {

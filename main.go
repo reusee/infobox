@@ -3,14 +3,11 @@ package main
 import (
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
-
-	_ "net/http/pprof"
 )
 
 func init() {
@@ -19,8 +16,6 @@ func init() {
 
 type Entry interface {
 	GetKey() string
-	ToRssItem() RssItem
-	ToHtml() string
 }
 
 type Collector interface {
@@ -88,21 +83,8 @@ func main() {
 		}
 	}
 
-	go func() {
-		for {
-			collect()
-			time.Sleep(time.Minute * 5)
-		}
-	}()
-
-	//go NewReader(db)
-
-	// rss server
-	p("start rss server.\n")
-	http.HandleFunc("/rss", db.RssHandler)
-	err = http.ListenAndServe("127.0.0.1:38888", nil)
-	if err != nil {
-		log.Fatal(err)
+	for {
+		collect()
+		time.Sleep(time.Minute * 5)
 	}
-
 }
