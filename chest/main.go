@@ -16,7 +16,7 @@ func init() {
 	go http.ListenAndServe("localhost:2801", nil)
 
 	gob.Register(new(infobox.Item))
-	gob.Register(new([]*infobox.Item))
+	gob.Register([]*infobox.Item{})
 }
 
 func main() {

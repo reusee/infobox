@@ -86,8 +86,6 @@ func main() {
 			}
 			entries, err := collector.Collect()
 			if err != nil {
-				// insert error report entry
-				p("%v\n", err)
 				addEntry(NewErrorEntry(err))
 				continue
 			}
