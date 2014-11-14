@@ -12,12 +12,6 @@ import (
 	"code.google.com/p/goauth2/oauth"
 )
 
-type Item struct {
-	Entry   Entry
-	AddTime time.Time
-	Read    bool
-}
-
 type kvInfo struct {
 	key   string
 	value interface{}

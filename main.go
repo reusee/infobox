@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"log"
 	"math/rand"
 	"os"
@@ -22,6 +23,16 @@ type Entry interface {
 
 type Collector interface {
 	Collect() ([]Entry, error)
+}
+
+type Item struct {
+	Entry   Entry
+	AddTime time.Time
+	Read    bool
+}
+
+func init() {
+	gob.Register(new(Item))
 }
 
 var (
@@ -63,6 +74,20 @@ func main() {
 	}
 	defer client.Close()
 
+	addEntry := func(entry Entry) {
+		key := entry.GetKey()
+		if !client.SetExists("infobox.entry-keys", key) {
+			err := client.ListAppend("infobox.entries", &Item{
+				Entry:   entry,
+				AddTime: time.Now(),
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+			client.SetAdd("infobox.entry-keys", key)
+		}
+	}
+
 	// collect
 	collect := func() {
 		for _, f := range []func() (Collector, error){
@@ -84,9 +109,13 @@ func main() {
 					NewErrorEntry(err),
 				})
 				p("%v\n", err)
+				addEntry(NewErrorEntry(err))
 				continue
 			}
 			db.AddEntries(entries)
+			for _, e := range entries {
+				addEntry(e)
+			}
 		}
 		// save
 		if err := db.Save(); err != nil {
