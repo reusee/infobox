@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/reusee/gobchest"
 )
 
 func init() {
@@ -54,13 +56,22 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// init gobchest client
+	client, err := gobchest.NewClient("localhost:2800")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer client.Close()
+
 	// collect
 	collect := func() {
 		for _, f := range []func() (Collector, error){
 			func() (Collector, error) { return NewV2exCollector() },
 			//func() (Collector, error) { return NewZhihuCollector(db) },
 			func() (Collector, error) { return NewBilibiliCollector(db) },
-			func() (Collector, error) { return NewDoubanCollector(db.TokenCache("douban")) },
+			func() (Collector, error) {
+				return NewDoubanCollector(NewOAuthTokenCache(client, "infobox.douban.oauthtoken"))
+			},
 		} {
 			collector, err := f()
 			if err != nil {

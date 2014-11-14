@@ -1,32 +1,47 @@
 package main
 
 import (
-	"errors"
+	"encoding/gob"
+	"encoding/json"
+	"fmt"
 
 	"code.google.com/p/goauth2/oauth"
+	"github.com/reusee/gobchest"
 )
 
-func (d *Database) TokenCache(key string) *OAuthTokenCache {
+func init() {
+	gob.Register(new(oauth.Token))
+}
+
+func NewOAuthTokenCache(client *gobchest.Client, key string) *OAuthTokenCache {
 	return &OAuthTokenCache{
-		db:  d,
-		key: key,
+		client: client,
+		key:    key,
 	}
 }
 
 type OAuthTokenCache struct {
-	db  *Database
-	key string
+	client *gobchest.Client
+	key    string
 }
 
 func (o *OAuthTokenCache) Token() (*oauth.Token, error) {
-	token, ok := o.db.OAuthTokens[o.key]
-	if !ok {
-		return nil, errors.New("no token")
+	s, err := o.client.Get(o.key)
+	if err != nil {
+		return nil, fmt.Errorf("no token for %s", o.key)
 	}
-	return token, nil
+	var token oauth.Token
+	err = json.Unmarshal(s.([]byte), &token)
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
 }
 
 func (o *OAuthTokenCache) PutToken(token *oauth.Token) error {
-	o.db.OAuthTokens[o.key] = token
-	return nil
+	s, err := json.Marshal(token)
+	if err != nil {
+		return err
+	}
+	return o.client.Set(o.key, s)
 }
