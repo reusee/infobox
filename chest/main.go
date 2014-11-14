@@ -24,7 +24,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	filePath := filepath.Join(user.HomeDir, ".chest.gob")
+	filePath := filepath.Join(user.HomeDir, ".infobox.chest")
 	server, err := gobchest.NewServer("localhost:2800", filePath)
 	if err != nil {
 		log.Fatal(err)
