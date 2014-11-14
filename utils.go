@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
+
+	"github.com/reusee/gobchest"
 
 	"code.google.com/p/go.net/html"
 )
@@ -67,6 +70,29 @@ func find(obj interface{}, predict func(interface{}) bool) interface{} {
 type KvStore interface {
 	KvGet(string) interface{}
 	KvSet(string, interface{})
+}
+
+type kvclient struct {
+	*gobchest.Client
+}
+
+func (k *kvclient) KvGet(key string) interface{} {
+	v, err := k.Get("infobox." + key)
+	if err != nil {
+		return nil
+	}
+	return v
+}
+
+func (k *kvclient) KvSet(key string, v interface{}) {
+	err := k.Set("infobox."+key, v)
+	if err != nil {
+		log.Fatalf("KvSet: %v", err)
+	}
+}
+
+func NewKvStore(client *gobchest.Client) KvStore {
+	return &kvclient{client}
 }
 
 func Err(format string, args ...interface{}) error {
