@@ -1,22 +1,20 @@
 package main
 
 import (
-	"encoding/gob"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os/user"
 	"path/filepath"
 
-	infobox "../"
 	"github.com/reusee/gobchest"
 )
 
 func init() {
 	go http.ListenAndServe("localhost:2801", nil)
 
-	gob.Register(new(infobox.Item))
-	gob.Register([]*infobox.Item{})
+	//gob.Register(new(infobox.Item))
+	//gob.Register([]*infobox.Item{})
 }
 
 func main() {
